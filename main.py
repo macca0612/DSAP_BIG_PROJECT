@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
 import csv
 
-# my version
 
 # Define your custom Dataset class
 class MusicGenreDataset(Dataset):
@@ -99,6 +98,7 @@ class MusicGenreClassifierGoogLeNet(nn.Module):
     def forward(self, x):
         return self.alexnet(x)
     
+# edit from linux
 
 # Parameters
 num_classes = 10  # Assume there are 10 music genre classes
