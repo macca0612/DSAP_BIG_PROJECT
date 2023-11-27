@@ -3,6 +3,7 @@ import librosa
 import librosa.display
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Set the path to the GTZAN dataset
 general_path = 'data/gtzan'
@@ -29,7 +30,7 @@ def process_and_save_full_mel(audio_path, output_folder, genre, filename, hop_le
     librosa.display.specshow(S_DB, sr=sr, hop_length=hop_length, x_axis='time', y_axis='log', cmap='cool')
 
     # Save the figure without title or color bar
-    output_filename = os.path.join(output_folder, f"{genre}/{genre}.{filename[:-4]}.png")
+    output_filename = os.path.join(output_folder, f"{genre}/{filename[:-4]}.png")
     plt.axis('off')
     plt.savefig(output_filename, bbox_inches='tight', pad_inches=0)
     plt.close()
@@ -38,7 +39,7 @@ def process_and_save_full_mel(audio_path, output_folder, genre, filename, hop_le
 genres = os.listdir(f'{general_path}/genres_original')
 output_folder = 'data/gtzan/images_MEL'
 
-for genre in genres:
+for genre in tqdm(genres):
     genre_path = os.path.join(f'{general_path}/genres_original', genre)
 
     for filename in os.listdir(genre_path):
