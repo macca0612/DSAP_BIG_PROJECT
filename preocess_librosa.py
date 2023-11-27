@@ -5,13 +5,13 @@ from tqdm import tqdm  # Import tqdm for the progress bar
 
 # Path to the folder containing GTZAN dataset audio files
 dataset_path = "data/gtzan/genres_original"
-output_path = "data/gtzan/data_MEL_3_0.5"  # Replace with the desired path
+output_path = "data/gtzan/data_MEL_640"  # Replace with the desired path
 
 # Create the output folder if it doesn't exist
 os.makedirs(output_path, exist_ok=True)
 
 # Function to extract and save the MEL spectrogram in multiple temporal segments
-def extract_and_save_mel_segments(file_path, output_folder, segment_duration=3, overlap=0.5, n_mels=128, n_fft=2048, hop_length=512):
+def extract_and_save_mel_segments_with_split(file_path, output_folder, segment_duration=3, overlap=0.5, n_mels=128, n_fft=2048, hop_length=512):
     # Load the audio file using Librosa
     y, sr = librosa.load(file_path, sr=None, duration=None)
 
@@ -45,6 +45,36 @@ def extract_and_save_mel_segments(file_path, output_folder, segment_duration=3, 
 
         # Save the MEL spectrogram segment as a binary file
         np.save(output_file_path, mel_spectrogram)
+        
+def extract_and_save_mel_segments(file_path, output_folder, segment_duration=3, overlap=0.5, n_mels=128, n_fft=2048, hop_length=512):
+    # Load the audio file using Librosa
+    y, sr = librosa.load(file_path, sr=None, duration=None)
+
+    # Compute the total duration of the audio file
+    total_duration = librosa.get_duration(y=y, sr=sr)
+    
+    mel_spectrogram = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels)
+    
+    relative_input_path = os.path.relpath(file_path, dataset_path)
+    
+    # Riduci la larghezza da 1293 a 640
+    new_width = 640
+    start_column = (mel_spectrogram.shape[1] - new_width) // 2
+    end_column = start_column + new_width
+
+    # Seleziona solo le colonne desiderate
+    cutted_spectrogram = mel_spectrogram[:, start_column:end_column]
+
+    # Build the output file path
+    relative_output_path = os.path.join(output_folder, os.path.dirname(relative_input_path))
+    
+    output_file_path = os.path.join(relative_output_path, f"{os.path.basename(file_path)}_mel_spectrogram.npy")
+
+    # Create subdirectories if they don't exist
+    os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
+
+    # Save the MEL spectrogram segment as a binary file
+    np.save(output_file_path, cutted_spectrogram)
 
 # Process all audio files in the GTZAN dataset with tqdm progress bar
 for root, dirs, files in tqdm(os.walk(dataset_path), desc="Processing files"):

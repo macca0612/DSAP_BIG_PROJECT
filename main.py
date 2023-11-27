@@ -50,72 +50,34 @@ class MusicGenreDataset(Dataset):
         return dataset
 
     def __len__(self):
-        return len(self.samples) * self.num_splits
+        return len(self.samples)
 
     def __getitem__(self, index):
-        path, target = self.samples[index // self.num_splits]  # Use integer division to get the original index
+        path, target = self.samples[index]  # Use integer division to get the original index
 
-        # Load the spectrogram image
-        with open(path, 'rb') as f:
-            img = Image.open(f).convert('RGB')
-            
-        if self.transform is not None:
-            img = self.transform(img)
-            
-        # Split the time dimension into num_splits parts
-        img_width = img.size(2)  # Assuming the time dimension is the width of the image
-        time_slice_width = img_width // self.num_splits
-
-        # Calculate the start and end indices for the time slice
-        start_idx = index % self.num_splits * time_slice_width
-        end_idx = (index % self.num_splits + 1) * time_slice_width
-
-        # Extract the time slice
-        img = img[:, :, start_idx:end_idx]
+        img = np.load(path)
         
         return img, target
 
-# Utilizza il resto del codice come precedentemente definito
 
-# Definisci la rete basata su AlexNet modificata per il tuo compito
-class MusicGenreClassifierAlexNet(nn.Module):
-    def __init__(self, num_classes):
-        super(MusicGenreClassifierAlexNet, self).__init__()
-        # Carica solo le parti condivise del modello AlexNet (senza l'ultimo strato)
-        self.alexnet = models.alexnet(pretrained=True)
-        self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Modifica l'ultimo strato
 
-    def forward(self, x):
-        return self.alexnet(x)
+def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,root):
     
-# Definisci la rete basata su AlexNet modificata per il tuo compito
-class MusicGenreClassifierGoogLeNet(nn.Module):
-    def __init__(self, num_classes):
-        super(MusicGenreClassifierGoogLeNet, self).__init__()
-        # Carica solo le parti condivise del modello AlexNet (senza l'ultimo strato)
-        self.alexnet = models.googlenet(pretrained=True)
-        # self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Modifica l'ultimo strato
-
-    def forward(self, x):
-        return self.alexnet(x)
-    
-# edit from linux
-
-def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
+    print("TRAIN:",train)
 
     # Parameters
     num_classes = 10  # Assume there are 10 music genre classes
-    num_splits = 10  # Number of splits per sample
-    batch_size = 30
-    root = "data/gtzan/images_MEL"  # Replace with the correct path
+    # num_splits = 10  # Number of splits per sample
+    # batch_size = 30
+    # root = "data/gtzan/images_MEL"  # Replace with the correct path
     # Parameters
-    learning_rate = 0.0001
-    num_epochs = 25
+    # learning_rate = 0.0001
+    # num_epochs = 25
     timestr = time.strftime("%Y%m%d-%H%M%S")
     # Chose the model to use
-    model_chosen = "googlenet"
+    # model_chosen = "googlenet"
     # Choose if doing Train and Test or ONLY TEST
-    train = True
+    # train = True
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -136,27 +98,21 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
     ])
 
     # Load your custom dataset with splits
-    dataset = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
-    dataset2 = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
+    dataset = MusicGenreDataset(root, transform=transform)
+    dataset2 = MusicGenreDataset(root, transform=transform)
 
-    show_first = F
+    show_first = True
     if show_first:
         
         # Create a DataLoader
-        dataloader = torch.utils.data.DataLoader(dataset2, batch_size=10, shuffle=False)
+        dataloader = torch.utils.data.DataLoader(dataset2, batch_size=25, shuffle=False)
 
         # Iterate over the DataLoader and visualize the first 10 images
         for batch in dataloader:
             images, labels = batch
 
-            # Plot the images
-            plt.figure(figsize=(15, 3))
-            for i in range(10):
-                plt.subplot(1, 10, i + 1)
-                plt.imshow(F.to_pil_image(images[i]))
-                plt.title(f'Label: {labels[i]}')
-                plt.axis('off')
-            plt.show()
+            for img in images:
+                print(img.size())
 
             break  # Break after the first batch to show only the first 10 images
 
@@ -187,9 +143,17 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
             nn.Dropout(0.2),  # Add dropout with a specified probability
             nn.Linear(1024, num_classes),
         )
-        # print(model)
-    # elif model_chosen == "custom 1":
-    #     model = 
+    elif model_chosen == "custom_1":
+        print("HERE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        model = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=128, kernel_size=5),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il primo layer di convoluzione
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=5),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il secondo layer di convoluzione
+            nn.Flatten(),
+            nn.Linear(4553, 10)
+        )
+        print(model)
 
 
     model = model.to(device)
@@ -203,8 +167,6 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
     val_losses = []
     train_accuracies = []
     val_accuracies = []
-
-
 
     if (train):
         
@@ -220,6 +182,8 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
             total_train = 0
 
             for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
+                print(inputs.size())  
+                print(labels)        
                 inputs, labels = inputs.to(device), labels.to(device)
                 # print(inputs[0])
                 
@@ -227,6 +191,7 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train):
                 
                 optimizer.zero_grad()
                 outputs = model(inputs)
+                print(outputs.size())  
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -389,10 +354,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Project of DSAP')
 
     # Aggiungere un argomento posizionale
-    parser.add_argument('model', choices=['googlenet', 'alexnet'], help='Based model for the training')
+    parser.add_argument('model', choices=['googlenet', 'alexnet','custom_1'], help='Based model for the training')
+    parser.add_argument('root', help='root of the dataset')
     parser.add_argument('-m', '--mode', help='Mode of using',choices=['train', 'test'], default='train')
     parser.add_argument('-s', '--num_split', help='numebr of split', default=10)
-    parser.add_argument('-b', '--batch_size', help='numebr bactch', default=32)
+    parser.add_argument('-b', '--batch_size', help='numebr bactch', default=1)
     parser.add_argument('-lr', '--learning_rate', help='Learning rate', default=0.0001)
     parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=5)
     
@@ -401,12 +367,16 @@ if __name__ == "__main__":
 
     model = args.model
     mode = args.mode
+    
     train = False
-    if mode == 'train':
-        train == True
+    
+    train == True
     num_split = args.num_split
     batch_size = args.batch_size
     learning_rate = args.learning_rate
     num_epochs = args.num_epochs
+    root = args.root
     
-    process(num_split,batch_size,learning_rate,num_epochs,model,train)
+    print(model)
+    
+    process(num_split,batch_size,learning_rate,num_epochs,model,True,root)
