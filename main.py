@@ -57,10 +57,10 @@ class MusicGenreDataset(Dataset):
         # Load the spectrogram image
         with open(path, 'rb') as f:
             img = Image.open(f).convert('RGB')
-            
+
         if self.transform is not None:
             img = self.transform(img)
-            
+
         # Split the time dimension into num_splits parts
         img_width = img.size(2)  # Assuming the time dimension is the width of the image
         time_slice_width = img_width // self.num_splits
@@ -71,8 +71,9 @@ class MusicGenreDataset(Dataset):
 
         # Extract the time slice
         img = img[:, :, start_idx:end_idx]
-        
+
         return img, target
+
 
 # Utilizza il resto del codice come precedentemente definito
 
@@ -86,7 +87,8 @@ class MusicGenreClassifierAlexNet(nn.Module):
 
     def forward(self, x):
         return self.alexnet(x)
-    
+
+
 # Definisci la rete basata su AlexNet modificata per il tuo compito
 class MusicGenreClassifierGoogLeNet(nn.Module):
     def __init__(self, num_classes):
@@ -97,7 +99,7 @@ class MusicGenreClassifierGoogLeNet(nn.Module):
 
     def forward(self, x):
         return self.alexnet(x)
-    
+
 
 # Parameters
 num_classes = 10  # Assume there are 10 music genre classes
@@ -116,11 +118,11 @@ train = True
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model_info = {
-    'parameter' : 'value',
-    'lr' : learning_rate,
-    'number of epochs' : num_epochs,
-    'base_model' :model_chosen,
-    'num_splits' : num_splits,
+    'parameter': 'value',
+    'lr': learning_rate,
+    'number of epochs': num_epochs,
+    'base_model': model_chosen,
+    'num_splits': num_splits,
     'device': str(device),
 }
 
@@ -137,7 +139,7 @@ dataset2 = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
 
 show_first = F
 if show_first:
-    
+
     # Create a DataLoader
     dataloader = torch.utils.data.DataLoader(dataset2, batch_size=10, shuffle=False)
 
@@ -167,7 +169,6 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-
 if model_chosen == "alexnet":
     # Initialize the model AlexNet with dropout
     model = models.alexnet(pretrained=True)
@@ -176,7 +177,7 @@ if model_chosen == "alexnet":
         nn.Dropout(0.2),  # Add dropout with a specified probability
         nn.Linear(1000, num_classes),
     )
-elif model_chosen== "googlenet":
+elif model_chosen == "googlenet":
     # Initialize the model GoogLeNet with dropout
     model = models.googlenet(pretrained=True)
     model.fc = nn.Sequential(
@@ -200,13 +201,11 @@ val_losses = []
 train_accuracies = []
 val_accuracies = []
 
-
-
 if (train):
-    
+
     trained = True
-    
-    print("Trainging on: ",device)
+
+    print("Trainging on: ", device)
 
     for epoch in range(num_epochs):
         # Training
@@ -215,12 +214,12 @@ if (train):
         correct_train = 0
         total_train = 0
 
-        for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
+        for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} - Training"):
             inputs, labels = inputs.to(device), labels.to(device)
             print(inputs[0])
-            
+
             # HERE = inputs[0]
-            
+
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -260,21 +259,21 @@ if (train):
         val_accuracy = correct_val / total_val
         val_losses.append(average_val_loss)
         val_accuracies.append(val_accuracy)
-        
+
         # save the model
-        newpath = "models/"+model_chosen+"_"+timestr 
+        newpath = "models/" + model_chosen + "_" + timestr
         if not os.path.exists(newpath):
             os.makedirs(newpath)
-            
+
         model_name = str(timestr) + "_" + str(epoch) + ".pth"
         # Save the trained model
-        torch.save(model.state_dict(), 'models/'+model_chosen+"_"+timestr +'/'+model_name)
+        torch.save(model.state_dict(), 'models/' + model_chosen + "_" + timestr + '/' + model_name)
 
         # Print training and validation metrics for the epoch
-        print(f"Epoch {epoch+1}/{num_epochs}, "
-            f"Train Loss: {average_train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, "
-            f"Val Loss: {average_val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
-        
+        print(f"Epoch {epoch + 1}/{num_epochs}, "
+              f"Train Loss: {average_train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, "
+              f"Val Loss: {average_val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
+
     model_name = timestr + ".pth"
     # Save the trained model
     torch.save(model.state_dict(), 'models/last.pth')
@@ -313,10 +312,9 @@ if (train):
         plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
     save_fig_name = timestr + ".png"
-    plt.savefig("save/"+model_chosen+"_"+save_fig_name)
-    plt.savefig("models/"+model_chosen+"_"+timestr+"/"+save_fig_name)
+    plt.savefig("save/" + model_chosen + "_" + save_fig_name)
+    plt.savefig("models/" + model_chosen + "_" + timestr + "/" + save_fig_name)
     plt.show()
-
 
 # Test the model
 # Load the saved model state
@@ -326,7 +324,6 @@ model.load_state_dict(torch.load('models/last.pth'))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Testing on: ", device)
 model = model.to(device)
-
 
 model.eval()
 correct = 0
@@ -363,14 +360,14 @@ model_info['f1_score'] = f1
 
 if trained:
     # Save the model information in a CSV file
-    csv_file_path = "models/"+model_chosen+"_"+timestr+"/"+"results.csv"
-    
+    csv_file_path = "models/" + model_chosen + "_" + timestr + "/" + "results.csv"
+
 with open(csv_file_path, 'w', newline='') as csv_file:
     csv_writer = csv.writer(csv_file)
     for key, value in model_info.items():
         # if isinstance(value, list):
         #     csv_writer.writerow([key] + value)
         # else:
-            csv_writer.writerow([key, value])
+        csv_writer.writerow([key, value])
 
 print(f'Model information saved to {csv_file_path}')
