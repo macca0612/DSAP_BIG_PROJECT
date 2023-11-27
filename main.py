@@ -56,14 +56,12 @@ class MusicGenreDataset(Dataset):
         path, target = self.samples[index]  # Use integer division to get the original index
 
         img = np.load(path)
-        
+
         return img, target
 
 
-
-def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,root):
-    
-    print("TRAIN:",train)
+def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, train, root):
+    print("TRAIN:", train)
 
     # Parameters
     num_classes = 10  # Assume there are 10 music genre classes
@@ -82,11 +80,11 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_info = {
-        'parameter' : 'value',
-        'lr' : f'{learning_rate:.8f}',
-        'number of epochs' : num_epochs,
-        'base_model' : model_chosen,
-        'num_splits' : num_splits,
+        'parameter': 'value',
+        'lr': f'{learning_rate:.8f}',
+        'number of epochs': num_epochs,
+        'base_model': model_chosen,
+        'num_splits': num_splits,
         'device': str(device),
     }
 
@@ -101,9 +99,9 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     dataset = MusicGenreDataset(root, transform=transform)
     dataset2 = MusicGenreDataset(root, transform=transform)
 
-    show_first = True
+    show_first = False
     if show_first:
-        
+
         # Create a DataLoader
         dataloader = torch.utils.data.DataLoader(dataset2, batch_size=25, shuffle=False)
 
@@ -127,7 +125,6 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-
     if model_chosen == "alexnet":
         # Initialize the model AlexNet with dropout
         model = models.alexnet(pretrained=True)
@@ -136,7 +133,7 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             nn.Dropout(0.2),  # Add dropout with a specified probability
             nn.Linear(1000, num_classes),
         )
-    elif model_chosen== "googlenet":
+    elif model_chosen == "googlenet":
         # Initialize the model GoogLeNet with dropout
         model = models.googlenet(pretrained=True)
         model.fc = nn.Sequential(
@@ -144,17 +141,20 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             nn.Linear(1024, num_classes),
         )
     elif model_chosen == "custom_1":
-        print("HERE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         model = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=128, kernel_size=5),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il primo layer di convoluzione
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=5),
-            nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il secondo layer di convoluzione
-            nn.Flatten(),
-            nn.Linear(4553, 10)
-        )
-        print(model)
 
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=5),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il secondo layer di convoluzione
+
+            nn.Flatten(),
+            nn.Linear(157 * 29 * 128, 10),
+            nn.LogSoftmax(dim=-1)
+        )
+        # print(model)
 
     model = model.to(device)
 
@@ -169,10 +169,10 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     val_accuracies = []
 
     if (train):
-        
+
         trained = True
-        
-        print("Trainging on: ",device)
+
+        print("Trainging on: ", device)
 
         for epoch in range(num_epochs):
             # Training
@@ -181,17 +181,19 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             correct_train = 0
             total_train = 0
 
-            for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
-                print(inputs.size())  
-                print(labels)        
+            for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} - Training"):
+                # print(f"Input shape:{inputs.size()}")
+                # print(f"Labels shape:{labels}")
                 inputs, labels = inputs.to(device), labels.to(device)
+                inputs = inputs.unsqueeze(1)  # Adds a channel dimension
+
                 # print(inputs[0])
-                
+
                 # HERE = inputs[0]
-                
+
                 optimizer.zero_grad()
                 outputs = model(inputs)
-                print(outputs.size())  
+                # print(f"Output shape:{outputs.size()}")
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -206,8 +208,8 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             train_accuracy = correct_train / total_train
             train_losses.append(average_train_loss)
             train_accuracies.append(train_accuracy)
-            model_info[f"train loss epoch "+str(epoch)] = f'{average_train_loss:.4f}'
-            model_info[f"train accuracy epoch "+str(epoch)] = f'{train_accuracy:.4f}'
+            model_info[f"train loss epoch " + str(epoch)] = f'{average_train_loss:.4f}'
+            model_info[f"train accuracy epoch " + str(epoch)] = f'{train_accuracy:.4f}'
 
             # Validation
             model.eval()
@@ -218,6 +220,7 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             with torch.no_grad():
                 for inputs_val, labels_val in tqdm(val_loader, desc="Validation"):
                     inputs_val, labels_val = inputs_val.to(device), labels_val.to(device)
+                    inputs_val = inputs_val.unsqueeze(1)  # Adds a channel dimension
 
                     outputs_val = model(inputs_val)
                     val_loss = criterion(outputs_val, labels_val)
@@ -231,23 +234,23 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             val_accuracy = correct_val / total_val
             val_losses.append(average_val_loss)
             val_accuracies.append(val_accuracy)
-            model_info[f"val loss epoch "+str(epoch)] = f'{average_val_loss:.4f}'
-            model_info[f"val accuracy epoch "+str(epoch)] = f'{val_accuracy:.4f}'
-            
+            model_info[f"val loss epoch " + str(epoch)] = f'{average_val_loss:.4f}'
+            model_info[f"val accuracy epoch " + str(epoch)] = f'{val_accuracy:.4f}'
+
             # save the model
-            newpath = "models/"+model_chosen+"_"+timestr 
+            newpath = "models/" + model_chosen + "_" + timestr
             if not os.path.exists(newpath):
                 os.makedirs(newpath)
-                
+
             model_name = str(timestr) + "_" + str(epoch) + ".pth"
             # Save the trained model
-            torch.save(model.state_dict(), 'models/'+model_chosen+"_"+timestr +'/'+model_name)
+            torch.save(model.state_dict(), 'models/' + model_chosen + "_" + timestr + '/' + model_name)
 
             # Print training and validation metrics for the epoch
-            print(f"Epoch {epoch+1}/{num_epochs}, "
-                f"Train Loss: {average_train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, "
-                f"Val Loss: {average_val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
-            
+            print(f"Epoch {epoch + 1}/{num_epochs}, "
+                  f"Train Loss: {average_train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}, "
+                  f"Val Loss: {average_val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}")
+
         model_name = timestr + ".pth"
         # Save the trained model
         torch.save(model.state_dict(), 'models/last.pth')
@@ -286,10 +289,9 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
             plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
         save_fig_name = timestr + ".png"
-        plt.savefig("save/"+model_chosen+"_"+save_fig_name)
-        plt.savefig("models/"+model_chosen+"_"+timestr+"/"+save_fig_name)
+        plt.savefig("save/" + model_chosen + "_" + save_fig_name)
+        plt.savefig("models/" + model_chosen + "_" + timestr + "/" + save_fig_name)
         plt.show()
-
 
     # Test the model
     # Load the saved model state
@@ -300,7 +302,6 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     print("Testing on: ", device)
     model = model.to(device)
 
-
     model.eval()
     correct = 0
     total = 0
@@ -310,6 +311,7 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
     with torch.no_grad():
         for inputs, labels in tqdm(test_loader, desc="Testing"):
             inputs, labels = inputs.to(device), labels.to(device)
+            inputs = inputs.unsqueeze(1)  # Adds a channel dimension
 
             outputs = model(inputs)
             _, predicted = torch.max(outputs.data, 1)
@@ -336,17 +338,17 @@ def process(num_splits,batch_size,learning_rate,num_epochs,model_chosen,train,ro
 
     if trained:
         # Save the model information in a CSV file
-        csv_file_path = "models/"+model_chosen+"_"+timestr+"/"+"results.csv"
+        csv_file_path = "models/" + model_chosen + "_" + timestr + "/" + "results.csv"
     else:
         csv_file_path = "last.csv"
-        
+
     with open(csv_file_path, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
         for key, value in model_info.items():
             # if isinstance(value, list):
             #     csv_writer.writerow([key] + value)
             # else:
-                csv_writer.writerow([key, value])
+            csv_writer.writerow([key, value])
 
 
 if __name__ == "__main__":
@@ -354,29 +356,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Project of DSAP')
 
     # Aggiungere un argomento posizionale
-    parser.add_argument('model', choices=['googlenet', 'alexnet','custom_1'], help='Based model for the training')
+    parser.add_argument('model', choices=['googlenet', 'alexnet', 'custom_1'], help='Based model for the training')
     parser.add_argument('root', help='root of the dataset')
-    parser.add_argument('-m', '--mode', help='Mode of using',choices=['train', 'test'], default='train')
+    parser.add_argument('-m', '--mode', help='Mode of using', choices=['train', 'test'], default='train')
     parser.add_argument('-s', '--num_split', help='numebr of split', default=10)
     parser.add_argument('-b', '--batch_size', help='numebr bactch', default=1)
     parser.add_argument('-lr', '--learning_rate', help='Learning rate', default=0.0001)
-    parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=5)
-    
+    parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=1)
+
     # Analizzare gli argomenti dalla riga di comando
     args = parser.parse_args()
 
     model = args.model
     mode = args.mode
-    
+
     train = False
-    
+
     train == True
     num_split = args.num_split
     batch_size = args.batch_size
     learning_rate = args.learning_rate
     num_epochs = args.num_epochs
     root = args.root
-    
+
     print(model)
-    
-    process(num_split,batch_size,learning_rate,num_epochs,model,True,root)
+
+    process(num_split, batch_size, learning_rate, num_epochs, model, True, root)
