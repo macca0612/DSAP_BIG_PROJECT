@@ -392,7 +392,7 @@ if __name__ == "__main__":
     parser.add_argument('model', choices=['googlenet', 'alexnet'], help='Based model for the training')
     parser.add_argument('-m', '--mode', help='Mode of using',choices=['train', 'test'], default='train')
     parser.add_argument('-s', '--num_split', help='numebr of split', default=10)
-    parser.add_argument('-b', '--bach_size', help='numebr bactch', default=32)
+    parser.add_argument('-b', '--batch_size', help='numebr bactch', default=32)
     parser.add_argument('-lr', '--learning_rate', help='Learning rate', default=0.0001)
     parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=5)
     
