@@ -17,6 +17,63 @@ import torchvision.transforms.functional as F
 import csv
 import argparse
 
+# Define your custom Dataset class
+class MusicGenreDatasetImg(Dataset):
+    def __init__(self, root, transform=None, target_transform=None, num_splits=10):
+        self.root = root
+        self.transform = transform
+        self.target_transform = target_transform
+        self.classes, self.class_to_idx = self._find_classes(self.root)
+        self.samples = self._make_dataset(self.root, self.class_to_idx)
+        self.num_splits = num_splits
+
+    def _find_classes(self, dir):
+        classes = [d.name for d in os.scandir(dir) if d.is_dir()]
+        classes.sort()
+        class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+        return classes, class_to_idx
+
+    def _make_dataset(self, dir, class_to_idx):
+        dataset = []
+        for target in sorted(class_to_idx.keys()):
+            d = os.path.join(dir, target)
+            if not os.path.isdir(d):
+                continue
+
+            for root, _, fnames in sorted(os.walk(d)):
+                for fname in sorted(fnames):
+                    path = os.path.join(root, fname)
+                    item = (path, class_to_idx[target])
+                    dataset.append(item)
+
+        return dataset
+
+    def __len__(self):
+        return len(self.samples) * self.num_splits
+
+    def __getitem__(self, index):
+        path, target = self.samples[index // self.num_splits]  # Use integer division to get the original index
+
+        # Load the spectrogram image
+        with open(path, 'rb') as f:
+            img = Image.open(f).convert('RGB')
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        # Split the time dimension into num_splits parts
+        img_width = img.size(2)  # Assuming the time dimension is the width of the image
+        time_slice_width = img_width // self.num_splits
+
+        # Calculate the start and end indices for the time slice
+        start_idx = index % self.num_splits * time_slice_width
+        end_idx = (index % self.num_splits + 1) * time_slice_width
+
+        # Extract the time slice
+        img = img[:, :, start_idx:end_idx]
+
+        return img, target
+
 
 # Define your custom Dataset class
 class MusicGenreDataset(Dataset):
@@ -58,9 +115,55 @@ class MusicGenreDataset(Dataset):
         img = np.load(path)
 
         return img, target
+    
+class CNNtoRNN(nn.Module):
+    def __init__(self, num_classes, rnn_hidden_size, num_rnn_layers) -> None:
+        super().__init__()
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(1, 128, 5, padding=2),
+            nn.MaxPool2d(2, 2),
+            nn.ReLU(),
+            nn.Conv2d(128, 128, 5, padding=2),
+            nn.MaxPool2d(2, 2),
+            nn.ReLU(),
+        )
+        # Size of the flattened CNN features, needs to be calculated based on the CNN output
+        self.cnn_output_size = 32 * 160 * 128
+
+        # RNN layers
+        self.rnn = nn.GRU(input_size=self.cnn_output_size,
+                          hidden_size=rnn_hidden_size,
+                          num_layers=num_rnn_layers,
+                          batch_first=True)
+
+        # Linear and LogSoftmax layers
+        self.fc = nn.Linear(rnn_hidden_size, num_classes)
+        # self.log_softmax = nn.LogSoftmax(dim=-1) # LogSoftmax does not work with CrossEntropyLoss !!!!
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv_layers(x)
+
+        # Flatten the CNN output for the RNN layer
+        x = x.view(x.size(0), -1)
+
+        # The RNN layer expects inputs of shape (batch, seq_len, features)
+        # Since we don't have a sequence, we can treat the entire CNN output as one sequence
+        # by adding an additional dimension with seq_len=1
+        x = x.unsqueeze(1)
+
+        # Apply the RNN layer
+        x, _ = self.rnn(x)
+
+        # Take the output for the last time-step
+        x = x[:, -1, :]
+
+        # Apply the final fully connected layer and LogSoftmax
+        x = self.fc(x)
+
+        return x
 
 
-def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, train, root):
+def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, train, root, rnn_hidden_size, num_rnn_layers):
     print("TRAIN:", train)
 
     # Parameters
@@ -86,6 +189,8 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
         'base_model': model_chosen,
         'num_splits': num_splits,
         'device': str(device),
+        'rnn_hidden_size': 96,
+        'num_rnn_layers': 1
     }
 
     trained = False
@@ -96,8 +201,16 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
     ])
 
     # Load your custom dataset with splits
-    dataset = MusicGenreDataset(root, transform=transform)
-    dataset2 = MusicGenreDataset(root, transform=transform)
+    if model_chosen == "googlenet" or "alexnet":
+        print("dataset IMG")
+        dataset = MusicGenreDatasetImg(root, transform=transform)
+        dataset2 = MusicGenreDatasetImg(root, transform=transform)
+    
+    else:
+        
+        dataset = MusicGenreDataset(root, transform=transform)
+        dataset2 = MusicGenreDataset(root, transform=transform)
+        
 
     show_first = False
     if show_first:
@@ -136,6 +249,7 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
     elif model_chosen == "googlenet":
         # Initialize the model GoogLeNet with dropout
         model = models.googlenet(pretrained=True)
+        print(model)
         model.fc = nn.Sequential(
             nn.Dropout(0.2),  # Add dropout with a specified probability
             nn.Linear(1024, num_classes),
@@ -151,10 +265,15 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
             nn.MaxPool2d(kernel_size=2, stride=2),  # MaxPooling dopo il secondo layer di convoluzione
 
             nn.Flatten(),
+            nn.Dropout(0.2),
             nn.Linear(157 * 29 * 128, 10),
             nn.LogSoftmax(dim=-1)
         )
-        # print(model)
+    elif model_chosen == "custom_2":
+        
+        model = CNNtoRNN(num_classes, num_rnn_layers, rnn_hidden_size)
+        
+      
 
     model = model.to(device)
 
@@ -267,10 +386,10 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
 
         # Annotate each point with its exact value
         for i, value in enumerate(train_losses):
-            plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+            plt.text(i, value, f'{value:.2f}', ha='center', va='bottom', fontsize=5)
 
         for i, value in enumerate(val_losses):
-            plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+            plt.text(i, value, f'{value:.2f}', ha='center', va='bottom',fontsize=5)
 
         # Plotting the training and validation accuracies
         plt.subplot(1, 2, 2)
@@ -311,6 +430,7 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
     with torch.no_grad():
         for inputs, labels in tqdm(test_loader, desc="Testing"):
             inputs, labels = inputs.to(device), labels.to(device)
+            
             inputs = inputs.unsqueeze(1)  # Adds a channel dimension
 
             outputs = model(inputs)
@@ -356,29 +476,33 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Project of DSAP')
 
     # Aggiungere un argomento posizionale
-    parser.add_argument('model', choices=['googlenet', 'alexnet', 'custom_1'], help='Based model for the training')
+    parser.add_argument('model', choices=['googlenet', 'alexnet', 'custom_1', 'custom_2'], help='Based model for the training')
     parser.add_argument('root', help='root of the dataset')
     parser.add_argument('-m', '--mode', help='Mode of using', choices=['train', 'test'], default='train')
     parser.add_argument('-s', '--num_split', help='numebr of split', default=10)
-    parser.add_argument('-b', '--batch_size', help='numebr bactch', default=1)
-    parser.add_argument('-lr', '--learning_rate', help='Learning rate', default=0.0001)
-    parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=1)
-
+    parser.add_argument('-b', '--batch_size', help='numebr bactch', default=32)
+    parser.add_argument('-lr', '--learning_rate', help='Learning rate', default=0.001)
+    parser.add_argument('-e', '--num_epochs', help='Number of epochs', default=5)
+    parser.add_argument('-rnns', '--rnn_hidden_size', help='Rnn hidden size', default=96)
+    parser.add_argument('-rnnl', '--rnn_layers', help='Rnn layers', default=1)
+    
     # Analizzare gli argomenti dalla riga di comando
     args = parser.parse_args()
 
     model = args.model
+    
     mode = args.mode
-
     train = False
-
-    train == True
+    if mode == "train":
+        train = True
     num_split = args.num_split
     batch_size = args.batch_size
     learning_rate = args.learning_rate
-    num_epochs = args.num_epochs
+    num_epochs = int(args.num_epochs)
     root = args.root
+    rnn_hidden_size = args.rnn_hidden_size
+    num_rnn_layers = args.rnn_layers
 
     print(model)
 
-    process(num_split, batch_size, learning_rate, num_epochs, model, True, root)
+    process(num_split, batch_size, learning_rate, num_epochs, model, True, root, rnn_hidden_size, num_rnn_layers)
