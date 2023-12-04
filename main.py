@@ -91,9 +91,12 @@ class MusicGenreDataset(Dataset):
         class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         return classes, class_to_idx
 
+
+    # TO-DO, check the target and use the one-hot encoding
     def _make_dataset(self, dir, class_to_idx):
         dataset = []
         for target in sorted(class_to_idx.keys()):
+        
             d = os.path.join(dir, target)
             if not os.path.isdir(d):
                 continue
@@ -114,6 +117,7 @@ class MusicGenreDataset(Dataset):
 
         img = np.load(path)
 
+        print(target)
         return img, target
     
 class CNNtoRNN(nn.Module):
@@ -202,7 +206,7 @@ def process(num_splits, batch_size, learning_rate, num_epochs, model_chosen, tra
 
     # Load your custom dataset with splits
     if model_chosen == "googlenet" or "alexnet":
-        print("dataset IMG")
+
         dataset = MusicGenreDatasetImg(root, transform=transform)
         dataset2 = MusicGenreDatasetImg(root, transform=transform)
     
