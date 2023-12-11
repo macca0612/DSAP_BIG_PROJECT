@@ -101,15 +101,15 @@ class MusicGenreClassifierGoogLeNet(nn.Module):
 
 # Parameters
 num_classes = 10  # Assume there are 10 music genre classes
-num_splits = 1  # Number of splits per sample
+num_splits = 10  # Number of splits per sample
 batch_size = 16
 root = "data\gtzan\images_MEL"  # Replace with the correct path
 # Parameters
 learning_rate = 0.0001
-num_epochs = 5
+num_epochs = 25
 timestr = time.strftime("%Y%m%d-%H%M%S")
 # Chose the model to use
-model_chosen = "googlenet"
+model_chosen = "alexnet"
 # Choose if doing Train and Test or ONLY TEST
 train = True
 
@@ -133,6 +133,7 @@ transform = transforms.Compose([
 
 # Load your custom dataset with splits
 dataset = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
+
 dataset2 = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
 
 show_first = True
@@ -163,9 +164,28 @@ test_size = len(dataset) - train_size - val_size
 
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
+
+
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+# Create a directory to save the test set images
+test_save_path = "models/"+model_chosen+"_"+timestr+"/test_images"
+os.makedirs(test_save_path, exist_ok=True)
+
+# Iterate over the test DataLoader and save the images
+for batch_idx, (images, labels) in enumerate(test_loader):
+    for i in range(len(images)):
+        image = F.to_pil_image(images[i])
+        label = int(labels[i])
+
+        # Save the image with a filename indicating the label
+        filename = f"test_image_{batch_idx * batch_size + i}_label_{label}.png"
+        image.save(os.path.join(test_save_path, filename))
+
+# Print a message indicating the completion of image saving
+print(f"Test set images saved to {test_save_path}")
 
 
 if model_chosen == "alexnet":
@@ -176,6 +196,7 @@ if model_chosen == "alexnet":
         nn.Dropout(0.2),  # Add dropout with a specified probability
         nn.Linear(4096, num_classes),
     )
+    print(model)
 elif model_chosen== "googlenet":
     # Initialize the model GoogLeNet with dropout
     model = models.googlenet(pretrained=True)
@@ -183,7 +204,7 @@ elif model_chosen== "googlenet":
         nn.Dropout(0.2),  # Add dropout with a specified probability
         nn.Linear(1024, num_classes),
     )
-    # print(model)
+    print(model)
 # elif model_chosen == "custom 1":
 #     model = 
 
@@ -217,7 +238,7 @@ if (train):
 
         for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
             inputs, labels = inputs.to(device), labels.to(device)
-            # print(inputs[0])
+            print(inputs[0].size())
 
             # HERE = inputs[0]
 
@@ -288,13 +309,16 @@ if (train):
     plt.ylabel('Loss')
     plt.title('Training and Validation Loss')
     plt.legend()
+    
+    model_info["train_loss"] = train_losses
+    model_info["val_loss"] = val_losses
 
-    # Annotate each point with its exact value
-    for i, value in enumerate(train_losses):
-        plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+    # # Annotate each point with its exact value
+    # for i, value in enumerate(train_losses):
+    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
-    for i, value in enumerate(val_losses):
-        plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+    # for i, value in enumerate(val_losses):
+    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
     # Plotting the training and validation accuracies
     plt.subplot(1, 2, 2)
@@ -304,13 +328,16 @@ if (train):
     plt.ylabel('Accuracy')
     plt.title('Training and Validation Accuracy')
     plt.legend()
+    
+    model_info["train_acc"] = train_accuracies
+    model_info["vall_acc"] = val_accuracies
 
-    # Annotate each point with its exact value
-    for i, value in enumerate(train_accuracies):
-        plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+    # # Annotate each point with its exact value
+    # for i, value in enumerate(train_accuracies):
+    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
-    for i, value in enumerate(val_accuracies):
-        plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
+    # for i, value in enumerate(val_accuracies):
+    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
     save_fig_name = timestr + ".png"
     plt.savefig("save/"+model_chosen+"_"+save_fig_name)
