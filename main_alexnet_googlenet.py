@@ -1,3 +1,8 @@
+# DSAP course project, Barcelona School of Telecommunication Engineering (ETSETB), UPC
+# Music Genre Classification using NN methods
+# Authors: Anatolii Skovitin, Francesco Maccantelli
+# Year: 2023/2024
+
 import os
 import torch
 import numpy as np
@@ -14,6 +19,7 @@ from tqdm import tqdm
 from torchvision.datasets import ImageFolder
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as F
+from sklearn.preprocessing import LabelBinarizer
 import csv
 
 
@@ -26,6 +32,9 @@ class MusicGenreDataset(Dataset):
         self.classes, self.class_to_idx = self._find_classes(self.root)
         self.samples = self._make_dataset(self.root, self.class_to_idx)
         self.num_splits = num_splits
+        # Initialize LabelBinarizer for one-hot encoding
+        self.label_binarizer = LabelBinarizer()
+        self.label_binarizer.fit(range(len(self.classes)))
 
     def _find_classes(self, dir):
         classes = [d.name for d in os.scandir(dir) if d.is_dir()]
@@ -71,39 +80,20 @@ class MusicGenreDataset(Dataset):
 
         # Extract the time slice
         img = img[:, :, start_idx:end_idx]
+        
+        # Use one-hot encoding for the target
+        target_one_hot = self.label_binarizer.transform([target])[0]
+        # Cast the target label to Long data type
+        target_one_hot = torch.tensor(target_one_hot, dtype=torch.float32)  # or torch.int64
 
-        return img, target
-
-# Utilizza il resto del codice come precedentemente definito
-
-# Definisci la rete basata su AlexNet modificata per il tuo compito
-class MusicGenreClassifierAlexNet(nn.Module):
-    def __init__(self, num_classes):
-        super(MusicGenreClassifierAlexNet, self).__init__()
-        # Carica solo le parti condivise del modello AlexNet (senza l'ultimo strato)
-        self.alexnet = models.alexnet(pretrained=True)
-        self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Modifica l'ultimo strato
-
-    def forward(self, x):
-        return self.alexnet(x)
-
-# Definisci la rete basata su AlexNet modificata per il tuo compito
-class MusicGenreClassifierGoogLeNet(nn.Module):
-    def __init__(self, num_classes):
-        super(MusicGenreClassifierGoogLeNet, self).__init__()
-        # Carica solo le parti condivise del modello AlexNet (senza l'ultimo strato)
-        self.alexnet = models.googlenet(pretrained=True)
-        # self.alexnet.classifier[6] = nn.Linear(4096, num_classes)  # Modifica l'ultimo strato
-
-    def forward(self, x):
-        return self.alexnet(x)
+        return img, target_one_hot
 
 
 # Parameters
 num_classes = 10  # Assume there are 10 music genre classes
 num_splits = 10  # Number of splits per sample
 batch_size = 16
-root = "data\gtzan\images_MEL"  # Replace with the correct path
+root = "data\gtzan\images_MEL" 
 # Parameters
 learning_rate = 0.0001
 num_epochs = 25
@@ -111,7 +101,7 @@ timestr = time.strftime("%Y%m%d-%H%M%S")
 # Chose the model to use
 model_chosen = "alexnet"
 # Choose if doing Train and Test or ONLY TEST
-train = True
+train = False
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -134,6 +124,7 @@ transform = transforms.Compose([
 # Load your custom dataset with splits
 dataset = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
 
+# Dataset just for display
 dataset2 = MusicGenreDataset(root, transform=transform, num_splits=num_splits)
 
 show_first = True
@@ -170,23 +161,6 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-# Create a directory to save the test set images
-test_save_path = "models/"+model_chosen+"_"+timestr+"/test_images"
-os.makedirs(test_save_path, exist_ok=True)
-
-# Iterate over the test DataLoader and save the images
-for batch_idx, (images, labels) in enumerate(test_loader):
-    for i in range(len(images)):
-        image = F.to_pil_image(images[i])
-        label = int(labels[i])
-
-        # Save the image with a filename indicating the label
-        filename = f"test_image_{batch_idx * batch_size + i}_label_{label}.png"
-        image.save(os.path.join(test_save_path, filename))
-
-# Print a message indicating the completion of image saving
-print(f"Test set images saved to {test_save_path}")
-
 
 if model_chosen == "alexnet":
     # Initialize the model AlexNet with dropout
@@ -205,8 +179,6 @@ elif model_chosen== "googlenet":
         nn.Linear(1024, num_classes),
     )
     print(model)
-# elif model_chosen == "custom 1":
-#     model = 
 
 
 model = model.to(device)
@@ -236,14 +208,13 @@ if (train):
         correct_train = 0
         total_train = 0
 
-        for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} - Training"):
-            inputs, labels = inputs.to(device), labels.to(device)
-            print(inputs[0].size())
+        for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{num_epochs} - Training"):
 
-            # HERE = inputs[0]
+            inputs, labels = inputs.to(device), labels.to(device)
 
             optimizer.zero_grad()
             outputs = model(inputs)
+            # print(f"Output shape:{outputs.size()}")
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -251,13 +222,16 @@ if (train):
             running_loss += loss.item()
 
             _, predicted = torch.max(outputs.data, 1)
+            # Update this line to use one-hot encoded labels
             total_train += labels.size(0)
-            correct_train += (predicted == labels).sum().item()
+            correct_train += (predicted == torch.argmax(labels, dim=1)).sum().item()
+
 
         average_train_loss = running_loss / len(train_loader)
         train_accuracy = correct_train / total_train
         train_losses.append(average_train_loss)
         train_accuracies.append(train_accuracy)
+
 
         # Validation
         model.eval()
@@ -268,6 +242,7 @@ if (train):
         with torch.no_grad():
             for inputs_val, labels_val in tqdm(val_loader, desc="Validation"):
                 inputs_val, labels_val = inputs_val.to(device), labels_val.to(device)
+                # inputs_val = inputs_val.unsqueeze(1)  
 
                 outputs_val = model(inputs_val)
                 val_loss = criterion(outputs_val, labels_val)
@@ -275,8 +250,8 @@ if (train):
 
                 _, predicted_val = torch.max(outputs_val.data, 1)
                 total_val += labels_val.size(0)
-                correct_val += (predicted_val == labels_val).sum().item()
-
+                correct_val += (predicted_val == torch.argmax(labels_val, dim=1)).sum().item()
+                
         average_val_loss = running_val_loss / len(val_loader)
         val_accuracy = correct_val / total_val
         val_losses.append(average_val_loss)
@@ -313,13 +288,6 @@ if (train):
     model_info["train_loss"] = train_losses
     model_info["val_loss"] = val_losses
 
-    # # Annotate each point with its exact value
-    # for i, value in enumerate(train_losses):
-    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
-
-    # for i, value in enumerate(val_losses):
-    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
-
     # Plotting the training and validation accuracies
     plt.subplot(1, 2, 2)
     plt.plot(train_accuracies, label='Training Accuracy', color='blue')
@@ -332,12 +300,6 @@ if (train):
     model_info["train_acc"] = train_accuracies
     model_info["vall_acc"] = val_accuracies
 
-    # # Annotate each point with its exact value
-    # for i, value in enumerate(train_accuracies):
-    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
-
-    # for i, value in enumerate(val_accuracies):
-    #     plt.text(i, value, f'{value:.2f}', ha='center', va='bottom')
 
     save_fig_name = timestr + ".png"
     plt.savefig("save/"+model_chosen+"_"+save_fig_name)
@@ -364,11 +326,17 @@ all_labels = []
 with torch.no_grad():
     for inputs, labels in tqdm(test_loader, desc="Testing"):
         inputs, labels = inputs.to(device), labels.to(device)
+        
+        # inputs = inputs.unsqueeze(1)  # Adds a channel dimension
 
+        optimizer.zero_grad()
         outputs = model(inputs)
+        
         _, predicted = torch.max(outputs.data, 1)
+        print(predicted)
+        # Update this line to use one-hot encoded labels
         total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+        correct += (predicted == torch.argmax(labels, dim=1)).sum().item()
 
         all_predicted.extend(predicted.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())

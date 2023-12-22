@@ -1,3 +1,8 @@
+# DSAP course project, Barcelona School of Telecommunication Engineering (ETSETB), UPC
+# Music Genre Classification using NN methods
+# Authors: Anatolii Skovitin, Francesco Maccantelli
+# Year: 2023/2024
+
 import os
 import librosa
 import librosa.display
@@ -17,7 +22,7 @@ def process_and_save_full_mel(audio_path, output_folder, genre, filename, hop_le
     y, _ = librosa.effects.trim(y)
 
     # Calculate MEL spectrogram
-    S = librosa.feature.melspectrogram(y=y, sr=sr, hop_length=hop_length)
+    S =  librosa.feature.melspectrogram(y=y, sr=sr, n_fft=2048, hop_length=hop_length, n_mels=128)
     S_DB = librosa.amplitude_to_db(S, ref=np.max)
     
     # Create the genre folder if it doesn't exist
@@ -36,11 +41,11 @@ def process_and_save_full_mel(audio_path, output_folder, genre, filename, hop_le
     plt.close()
 
 # Process each audio file in the dataset
-genres = os.listdir(f'{general_path}/genres_original')
-output_folder = 'data/gtzan/images_MEL'
+genres = os.listdir(f'{general_path}')
+output_folder = 'data/la_primavera/image_mel'
 
 for genre in tqdm(genres):
-    genre_path = os.path.join(f'{general_path}/genres_original', genre)
+    genre_path = os.path.join(f'{general_path}', genre)
 
     for filename in os.listdir(genre_path):
         audio_path = os.path.join(genre_path, filename)

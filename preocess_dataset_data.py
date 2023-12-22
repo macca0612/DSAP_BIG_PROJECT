@@ -1,7 +1,12 @@
+# DSAP course project, Barcelona School of Telecommunication Engineering (ETSETB), UPC
+# Music Genre Classification using NN methods
+# Authors: Anatolii Skovitin, Francesco Maccantelli
+# Year: 2023/2024
+
 import os
 import numpy as np
 import librosa
-from tqdm import tqdm  # Import tqdm for the progress bar
+from tqdm import tqdm  
 
 # Path to the folder containing GTZAN dataset audio files
 dataset_path = "data/gtzan/genres_original"
@@ -17,32 +22,24 @@ def extract_and_save_mel_segments_with_split(file_path, output_folder, segment_s
     
     # Compute the MEL spectrogram for the segment
     mel_spectrogram = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels)
-
-    # Calcola la nuova larghezza per ogni parte
     new_width_per_part = mel_spectrogram.shape[1] // segment_split
-
-    # Inizializza una lista per contenere gli intervalli delle colonne per ciascuna parte
     column_ranges = []
     
     relative_input_path = os.path.relpath(file_path, dataset_path)
     relative_output_path = os.path.join(output_folder, os.path.dirname(relative_input_path))
 
-    # Calcola gli intervalli delle colonne per ciascuna parte
     for part_index in range(segment_split):
-        # Calcola la nuova larghezza per questa parte
+
         part_width = new_width_per_part
-        
-        # Calcola l'indice di inizio e fine per questa parte
         start_column = part_index * new_width_per_part
         end_column = start_column + part_width
         
-        # Aggiungi l'intervallo delle colonne alla lista
+
         column_ranges.append((start_column, end_column))
 
-    # Ora, puoi utilizzare gli intervalli delle colonne per suddividere lo spettrogramma MEL
     mel_spectrogram_parts = []
     for part_index, (start_column, end_column) in enumerate(column_ranges):
-        # Seleziona solo le colonne desiderate per questa parte
+
         cutted_spectrogram_part = mel_spectrogram[:, start_column:end_column]
 
         # Resize per garantire che tutte le parti abbiano la stessa lunghezza
@@ -79,7 +76,6 @@ def extract_and_save_mel_segments(file_path, output_folder, segment_duration=3, 
     start_column = (mel_spectrogram.shape[1] - new_width) // 2
     end_column = start_column + new_width
 
-    # Seleziona solo le colonne desiderate
     cutted_spectrogram = mel_spectrogram[:, start_column:end_column]
 
     # Build the output file path
